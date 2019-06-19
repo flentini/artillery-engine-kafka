@@ -41,10 +41,11 @@ KafkaEngine.prototype.step = function step (rs, ee) {
       const data = typeof rs.publishMessage.data === 'object'
             ? JSON.stringify(rs.publishMessage.data)
             : String(rs.publishMessage.data);
+      const batchSize = Number(rs.publishMessage.batch) || 1;
 
       const message = {
         topic: rs.publishMessage.topic,
-        messages: data
+        messages: new Array(batchSize).fill().map(() => data)
       }
 
       context.kafka.producer.send([message], function (err, data) {
@@ -56,7 +57,6 @@ KafkaEngine.prototype.step = function step (rs, ee) {
         }
 
         ee.emit('response', 0, 0, context._uid);
-        debug(data);
 
         return callback(null, context);
       });
@@ -82,15 +82,20 @@ KafkaEngine.prototype.compile = function compile(tasks, scenarioSpec, ee) {
       delete opts.host;
 
       const kafkaClient = new kafka.KafkaClient(opts);
-      const HLProducer = kafka.HighLevelProducer;
 
       initialContext.kafka = {
-        producer: new HLProducer(kafkaClient)
+        producer: new (kafka.HighLevelProducer)(kafkaClient)
       };
 
-      ee.emit('started');
+      initialContext.kafka.producer.on('error', function (err) {
+        ee.emit('error', err);
+      })
 
-      return next(null, initialContext);
+      initialContext.kafka.producer.on('ready', function () {
+        ee.emit('started');
+
+        next(null, initialContext);
+      })
     }
 
     let steps = [init].concat(tasks);
