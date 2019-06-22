@@ -1,14 +1,14 @@
 {
   "name": "artillery-engine-kafka",
   "version": "1.0.0",
-  "description": "",
+  "description": "kafka-engine plugin for artillery",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["kafka", "load"],
+  "author": "Francesco Lentini",
+  "license": "MPL-2.0",
   "dependencies": {
     "async": "^3.0.1",
     "debug": "^4.1.1",
