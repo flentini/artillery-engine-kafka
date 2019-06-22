@@ -3,6 +3,12 @@ const debug = require('debug')('engine:kafka');
 const A = require('async');
 const _ = require('lodash');
 
+const getPayload = length => Buffer.alloc(length,
+  Math.random()
+    .toString(36)
+    .replace(/[^a-z]+/g, '')
+    .substr(0, 1));
+
 function KafkaEngine(script, ee, helpers) {
   this.script = script;
   this.ee = ee;
@@ -11,13 +17,13 @@ function KafkaEngine(script, ee, helpers) {
   return this;
 }
 
-KafkaEngine.prototype.createScenario = function(scenarioSpec, ee) {
+KafkaEngine.prototype.createScenario = function createScenario(scenarioSpec, ee) {
   const tasks = scenarioSpec.flow.map(rs => this.step(rs, ee));
 
   return this.compile(tasks, scenarioSpec.flow, ee);
-}
+};
 
-KafkaEngine.prototype.step = function step (rs, ee) {
+KafkaEngine.prototype.step = function step(rs, ee) {
   const self = this;
 
   if (rs.loop) {
@@ -27,8 +33,9 @@ KafkaEngine.prototype.step = function step (rs, ee) {
   }
 
   if (rs.log) {
-    return function log (context, callback) {
-      return process.nextTick(function () { callback(null, context); });
+    return function log(context, callback) {
+      // console.log(template(rs.log, context));
+      return process.nextTick(() => { callback(null, context); });
     };
   }
 
@@ -37,18 +44,26 @@ KafkaEngine.prototype.step = function step (rs, ee) {
   }
 
   if (rs.publishMessage) {
-    return function publishMessage (context, callback) {
-      const data = typeof rs.publishMessage.data === 'object'
-            ? JSON.stringify(rs.publishMessage.data)
-            : String(rs.publishMessage.data);
+    return function publishMessage(context, callback) {
       const batchSize = Number(rs.publishMessage.batch) || 1;
+      let data;
+
+      if (rs.publishMessage.data) {
+        data = typeof rs.publishMessage.data === 'object'
+          ? JSON.stringify(rs.publishMessage.data)
+          : String(rs.publishMessage.data);
+      } else if (rs.publishMessage.size) {
+        data = getPayload(Number(rs.publishMessage.size));
+      } else {
+        throw new Error('either publishMessage.data or publishMessage.size is required');
+      }
 
       const message = {
         topic: rs.publishMessage.topic,
-        messages: new Array(batchSize).fill().map(() => data)
-      }
+        messages: new Array(batchSize).fill().map(() => data),
+      };
 
-      context.kafka.producer.send([message], function (err, data) {
+      context.kafka.producer.send([message], (err) => {
         if (err) {
           ee.emit('error', err);
           debug(err);
@@ -60,56 +75,58 @@ KafkaEngine.prototype.step = function step (rs, ee) {
 
         return callback(null, context);
       });
-    }
+    };
   }
 
-  return function (context, callback) {
+  return function s(context, callback) {
     return callback(null, context);
-  }
-}
+  };
+};
 
 KafkaEngine.prototype.compile = function compile(tasks, scenarioSpec, ee) {
   const self = this;
+
   return function scenario(initialContext, callback) {
-    const init = function init (next) {
+    const init = function init(next) {
       if (!((self.script.config.kafka || {}).client || {}).host) {
-        throw new Error('kafka.host is required')
+        throw new Error('kafka.host is required');
       }
 
       const opts = Object.assign({}, self.script.config.kafka, {
-        kafkaHost: self.script.config.kafka.host
-      });
-      delete opts.host;
+        kafkaHost: self.script.config.kafka.host,
+      }, { host: undefined });
 
       const kafkaClient = new kafka.KafkaClient(opts);
+      const producer = new (kafka.HighLevelProducer)(kafkaClient);
 
-      initialContext.kafka = {
-        producer: new (kafka.HighLevelProducer)(kafkaClient)
-      };
-
-      initialContext.kafka.producer.on('error', function (err) {
+      producer.on('error', (err) => {
         ee.emit('error', err);
-      })
+      });
 
-      initialContext.kafka.producer.on('ready', function () {
+      producer.on('ready', () => {
         ee.emit('started');
 
-        next(null, initialContext);
-      })
-    }
+        next(null, Object.assign(initialContext, {
+          kafka: {
+            producer
+          }
+        }));
+      });
+    };
 
-    let steps = [init].concat(tasks);
+    const steps = [init].concat(tasks);
 
     A.waterfall(
       steps,
-      function done (err, context) {
+      (err, context) => {
         if (err) {
           debug(err);
         }
 
         return callback(err, context);
-      });
-  }
-}
+      },
+    );
+  };
+};
 
 module.exports = KafkaEngine;
