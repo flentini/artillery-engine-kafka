@@ -8,6 +8,7 @@ const getPayload = length => Buffer.alloc(length,
     .toString(36)
     .replace(/[^a-z]+/g, '')
     .substr(0, 1));
+const { log: logger } = console;
 
 function KafkaEngine(script, ee, helpers) {
   this.script = script;
@@ -34,6 +35,7 @@ KafkaEngine.prototype.step = function step(rs, ee) {
 
   if (rs.log) {
     return function log(context, callback) {
+      logger(rs.log);
       // console.log(template(rs.log, context));
       return process.nextTick(() => { callback(null, context); });
     };
@@ -88,13 +90,11 @@ KafkaEngine.prototype.compile = function compile(tasks, scenarioSpec, ee) {
 
   return function scenario(initialContext, callback) {
     const init = function init(next) {
-      if (!((self.script.config.kafka || {}).client || {}).host) {
-        throw new Error('kafka.host is required');
+      if (!((self.script.config.kafka || {}).client || {}).kafkaHost) {
+        throw new Error('kafka.client.kafkaHost is required');
       }
 
-      const opts = Object.assign({}, self.script.config.kafka, {
-        kafkaHost: self.script.config.kafka.host,
-      }, { host: undefined });
+      const { kafka: { client: opts } } = self.script.config;
 
       const kafkaClient = new kafka.KafkaClient(opts);
       const producer = new (kafka.HighLevelProducer)(kafkaClient);
