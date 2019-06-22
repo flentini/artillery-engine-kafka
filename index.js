@@ -10,6 +10,8 @@ const getPayload = length => Buffer.alloc(length,
     .substr(0, 1));
 const { log: logger } = console;
 
+const DEFAULT_MESSAGE_SIZE = 300;
+
 function KafkaEngine(script, ee, helpers) {
   this.script = script;
   this.ee = ee;
@@ -54,10 +56,10 @@ KafkaEngine.prototype.step = function step(rs, ee) {
         data = typeof rs.publishMessage.data === 'object'
           ? JSON.stringify(rs.publishMessage.data)
           : String(rs.publishMessage.data);
-      } else if (rs.publishMessage.size) {
-        data = getPayload(Number(rs.publishMessage.size));
       } else {
-        throw new Error('either publishMessage.data or publishMessage.size is required');
+        data = getPayload(
+          Number(rs.publishMessage.size) || DEFAULT_MESSAGE_SIZE
+        );
       }
 
       const message = {

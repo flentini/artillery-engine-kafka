@@ -38,12 +38,18 @@ scenarios:
           topic: "myTestTopic"
           # size of the batch, default 1
           batch: 10
-          # size of the message in bytes, default 500.
+          # size of the message in bytes, default 300.
           # Ignored if data is defined
-          size: 300
+          size: 500
           # message payload, takes precedence over size parameter
           # it can be an object or a string
           data:
             name: "Mr Charles J. Message"
             location: "London, UK"
+```
+
+### Run the scenario
+
+```
+artillery run my-scenario.yml
 ```
