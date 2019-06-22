@@ -6,8 +6,7 @@ const _ = require('lodash');
 const getPayload = length => Buffer.alloc(length,
   Math.random()
     .toString(36)
-    .replace(/[^a-z]+/g, '')
-    .substr(0, 1));
+    .replace(/[^a-z]+/g, ''));
 const { log: logger } = console;
 
 const DEFAULT_MESSAGE_SIZE = 300;
