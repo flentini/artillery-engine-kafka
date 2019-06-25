@@ -3,13 +3,26 @@ const debug = require('debug')('engine:kafka');
 const A = require('async');
 const _ = require('lodash');
 
+const { log: logger } = console;
+const DEFAULT_MESSAGE_SIZE = 300;
+
+const createProducer = (client, scenarioSpec) => {
+  const producer = scenarioSpec.some(scenario => scenario
+    .flow.some(({ publishMessage = {} }) => publishMessage && 'partition' in publishMessage));
+
+  return producer
+    ? new (kafka.Producer)(client)
+    : new (kafka.HighLevelProducer)(client);
+};
+
 const getPayload = length => Buffer.alloc(length,
   Math.random()
     .toString(36)
     .replace(/[^a-z]+/g, ''));
-const { log: logger } = console;
 
-const DEFAULT_MESSAGE_SIZE = 300;
+const createMessage = data => (typeof data === 'object'
+  ? JSON.stringify(data)
+  : String(data));
 
 function KafkaEngine(script, ee, helpers) {
   this.script = script;
@@ -36,8 +49,8 @@ KafkaEngine.prototype.step = function step(rs, ee) {
 
   if (rs.log) {
     return function log(context, callback) {
-      logger(rs.log);
-      // console.log(template(rs.log, context));
+      logger(self.helpers.template(rs.log, context));
+
       return process.nextTick(() => { callback(null, context); });
     };
   }
@@ -49,24 +62,25 @@ KafkaEngine.prototype.step = function step(rs, ee) {
   if (rs.publishMessage) {
     return function publishMessage(context, callback) {
       const batchSize = Number(rs.publishMessage.batch) || 1;
-      let data;
-
-      if (rs.publishMessage.data) {
-        data = typeof rs.publishMessage.data === 'object'
-          ? JSON.stringify(rs.publishMessage.data)
-          : String(rs.publishMessage.data);
-      } else {
-        data = getPayload(
-          Number(rs.publishMessage.size) || DEFAULT_MESSAGE_SIZE
-        );
-      }
+      const { producer } = context.kafka;
+      const {
+        topic, data, size, partition
+      } = rs.publishMessage;
 
       const message = {
-        topic: rs.publishMessage.topic,
-        messages: new Array(batchSize).fill().map(() => data),
+        topic,
+        messages: new Array(batchSize)
+          .fill()
+          .map(() => (data
+            ? createMessage(data)
+            : getPayload(Number(size) || DEFAULT_MESSAGE_SIZE)))
       };
 
-      context.kafka.producer.send([message], (err) => {
+      if (partition) {
+        message.partition = partition;
+      }
+
+      producer.send([message], (err) => {
         if (err) {
           ee.emit('error', err);
           debug(err);
@@ -86,6 +100,7 @@ KafkaEngine.prototype.step = function step(rs, ee) {
   };
 };
 
+
 KafkaEngine.prototype.compile = function compile(tasks, scenarioSpec, ee) {
   const self = this;
 
@@ -98,7 +113,7 @@ KafkaEngine.prototype.compile = function compile(tasks, scenarioSpec, ee) {
       const { kafka: { client: opts } } = self.script.config;
 
       const kafkaClient = new kafka.KafkaClient(opts);
-      const producer = new (kafka.HighLevelProducer)(kafkaClient);
+      const producer = createProducer(kafkaClient, self.script.scenarios);
 
       producer.on('error', (err) => {
         ee.emit('error', err);
