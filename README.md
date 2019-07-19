@@ -2,7 +2,7 @@
 
 Load Test Kafka with [Artillery](https://artillery.io)
 
-Based on the [artillery-engine-kinesis](https://github.com/artilleryio/artillery-engine-kinesis) plugin
+It uses [kafka-node](https://www.npmjs.com/package/kafka-node) under the hood
 
 ## Usage
 
@@ -44,6 +44,8 @@ scenarios:
           data:
             name: "Mr Charles J. Message"
             location: "London, UK"
+          # partition to hit. If set the producer will be an instance of Producer. Default 0
+          partition: 1
 ```
 
 ### Run the scenario
