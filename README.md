@@ -4,8 +4,6 @@ Load Test Kafka with [Artillery](https://artillery.io)
 
 Based on the [artillery-engine-kinesis](https://github.com/artilleryio/artillery-engine-kinesis) plugin
 
-This is a work-in-progress
-
 ## Usage
 
 ### Install the plugin
